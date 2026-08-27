@@ -3,6 +3,8 @@
 `Ctrl+N` / `Ctrl+P` / `Ctrl+F` / `Ctrl+B` navigation in [Omarchy](https://omarchy.org)'s
 keyboard-driven popups, **without forking a single line of them**.
 
+<img src="demo.gif" alt="Ctrl+N and Ctrl+P move the selection, Ctrl+F enters a submenu, Ctrl+B leaves it, and typing still filters" width="320">
+
 | Surface | `Ctrl+P` | `Ctrl+N` | `Ctrl+B` | `Ctrl+F` |
 |---|---|---|---|---|
 | Menu (`Super+Space`) | up | down | back a level | descend / activate |
