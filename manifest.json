@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "itsgg.readline-keys",
+  "name": "Readline keys",
+  "version": "1.0.0",
+  "author": "itsgg",
+  "description": "Ctrl+N/P/F/B navigation in Omarchy's menu, clipboard, emoji and image popups, without forking them",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}
