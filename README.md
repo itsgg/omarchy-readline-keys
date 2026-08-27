@@ -4,7 +4,7 @@
 keyboard-driven popups, **without forking a single line of them**.
 
 <p align="center">
-  <img src="demo.gif" width="380"
+  <img src="demo.gif" width="460"
        alt="Ctrl+N and Ctrl+P move the selection, Ctrl+F enters a submenu, Ctrl+B leaves it, and typing still filters">
 </p>
 
