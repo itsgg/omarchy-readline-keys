@@ -1,11 +1,12 @@
 # Readline Keys
 
-`Ctrl+N` / `Ctrl+P` / `Ctrl+F` / `Ctrl+B` navigation in [Omarchy](https://omarchy.org)'s
-keyboard-driven popups, **without forking a single line of them**.
+`Ctrl+N` / `Ctrl+P` / `Ctrl+F` / `Ctrl+B` navigation, plus `Ctrl+M` for `Enter`
+and `Ctrl+[` for `Escape`, in [Omarchy](https://omarchy.org)'s keyboard-driven
+popups, **without forking a single line of them**.
 
 <p align="center">
-  <img src="demo.gif" width="460"
-       alt="Ctrl+N and Ctrl+P move the selection, Ctrl+F enters a submenu, Ctrl+B leaves it, and typing still filters">
+  <img src="demo.gif" width="435"
+       alt="Ctrl+N and Ctrl+P move the selection, Ctrl+F enters a submenu, Ctrl+B leaves it, typing still filters, Ctrl+[ clears the filter and Ctrl+M opens the highlighted row">
 </p>
 
 | Surface | `Ctrl+P` | `Ctrl+N` | `Ctrl+B` | `Ctrl+F` |
@@ -19,8 +20,14 @@ Emacs semantics: `N`/`P` move by line, `F`/`B` move within it, which is why the
 mapping lands exactly on the emoji grid, and why the menu's `F`/`B` follow its
 existing Right/Left (descend/back) rather than paging.
 
+On top of that, `Ctrl+M` is `Enter` and `Ctrl+[` is `Escape` on all four surfaces:
+the terminal control codes for CR and ESC, doing exactly what the real key does
+there, including `Escape`'s habit of clearing a non-empty filter before it closes
+the popup. (While a confirmation dialog owns the keys, as the menu's uninstall
+prompt does, this plugin stands down entirely and you need the real `Escape`.)
+
 Every stock binding still works. Arrows, `PageUp`/`PageDown`, `Enter`, `Escape`,
-`Delete`, `Ctrl+U`: all untouched. Only the four chords Omarchy ignores are claimed,
+`Delete`, `Ctrl+U`: all untouched. Only the six chords Omarchy ignores are claimed,
 and only when Control alone is held, so `Ctrl+Shift+N` stays free.
 
 ## Install
@@ -45,7 +52,7 @@ remote, `omarchy plugin update` only fast-forwards git-installed plugins, and
 `omarchy update` does not itself update local plugins. So a cloned `Menu.qml`
 keeps running the code it was copied from, forever, while upstream moves on.
 You silently stop receiving every fix to the ~1900 lines you forked for the sake
-of four keys.
+of six keys.
 
 **This plugin ships no upstream code at all.** It leaves the built-ins completely
 stock and installs alongside them, so they keep updating with Omarchy normally.
@@ -89,7 +96,7 @@ Worth a quick check after a major Omarchy upgrade. Set `debug: true` in
 
 ## The pattern is the reusable part
 
-Four keybindings are the excuse; the interesting part is that Omarchy's built-in
+Six keybindings are the excuse; the interesting part is that Omarchy's built-in
 popup plugins (anything of kind `panel`, `overlay` or `menu`) can be extended
 this way: reached through `shell.panelLoaders`, driven by their own public
 functions, without copying a line of them.

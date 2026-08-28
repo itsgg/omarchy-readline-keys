@@ -23,8 +23,8 @@ works immediately, and then it rots:
   ships, not a guarantee of the update mechanism
 
 So your fork keeps running the code it was copied from while upstream moves on.
-Fork 1900 lines of `Menu.qml` for four keybindings and you silently stop
-receiving every fix to the other 1896.
+Fork 1900 lines of `Menu.qml` for six keybindings and you silently stop
+receiving every fix to the other 1894.
 
 ## The technique
 

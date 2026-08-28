@@ -1,8 +1,9 @@
 import QtQuick
 import Quickshell
 
-// Adds readline navigation (Ctrl+N/P/F/B) to Omarchy's keyboard-driven popups
-// WITHOUT modifying or forking any of them.
+// Adds readline keys (Ctrl+N/P/F/B to navigate, Ctrl+M for Enter, Ctrl+[ for
+// Escape) to Omarchy's keyboard-driven popups WITHOUT modifying or forking any
+// of them.
 //
 // Omarchy hardcodes popup navigation in if/else chains over `event.key`, and
 // none of these surfaces uses a real text input, so Qt's standard editing keys
@@ -12,9 +13,9 @@ import Quickshell
 // This takes the other route. As a `service` plugin it is handed the live
 // `shell` object, walks to each popup's key-handling Item at runtime, parents a
 // tiny focused Item under it, and calls the popup's own public functions
-// (select / goBack / activateIndex / selectAdjacent). Keys we do not claim
-// propagate to the original handler untouched, so every stock binding still
-// works and the popups stay 100% upstream code.
+// (select / goBack / activateIndex / selectAdjacent / cancel). Keys we do not
+// claim propagate to the original handler untouched, so every stock binding
+// still works and the popups stay 100% upstream code.
 
 Item {
   id: root
@@ -28,38 +29,66 @@ Item {
   property bool debug: false
   function log(m) { if (debug) console.warn("readline-keys: " + m) }
 
+  // The menu binds Enter, Right and (through us) Ctrl+F to one branch, dmenu
+  // variants included, so `fwd` and `accept` share this. activateIndex() is
+  // bounds-checked upstream and resolves dmenu's "input" mode itself, which is
+  // why the row count and the mode never have to be read from out here.
+  //
+  // The first press only arms the cursor, which upstream does as
+  // `if (displayModel.count > 0) cursorActive = true`. displayModel is private
+  // to the popup, so arm it through select(0) instead: it carries the same
+  // empty-list guard, and it lands on row 0, which is where selectedIndex
+  // already sits every time upstream clears cursorActive.
+  function menuActivate(h) {
+    if (h.dmenuActive) h.activateIndex(h.cursorActive ? h.selectedIndex : 0)
+    else if (h.cursorActive) h.activateIndex(h.selectedIndex)
+    else h.select(0)
+  }
+
   // Per-surface semantics. Emacs reading: N/P move by line, F/B move within it.
   //   menu         a vertical list inside a hierarchy - F descends, B goes back
   //   clipboard    a single column - no horizontal axis, so F/B are unbound
   //   emojis       a grid - the case the emacs mapping fits exactly
   //   image-picker one horizontal strip - every key steps the strip
+  // `accept` and `abort` are the terminal control codes for Enter and Escape
+  // (Ctrl+M is CR, Ctrl+[ is ESC), so each one mirrors what that surface
+  // already does with the real key, filter-clearing step and all.
   readonly property var surfaces: ({
     "omarchy.menu": {
       // The uninstall confirmation takes over the popup's key handling; acting
       // underneath it would move a selection the user can no longer see.
       blocked: function(h) { return h.deleteConfirmOpen === true },
-      next:  function(h) { h.select(1) },
-      prev:  function(h) { h.select(-1) },
-      fwd:   function(h) { if (h.cursorActive) h.activateIndex(h.selectedIndex)
-                           else h.cursorActive = true },
-      back:  function(h) { h.goBack() }
+      next:   function(h) { h.select(1) },
+      prev:   function(h) { h.select(-1) },
+      fwd:    function(h) { root.menuActivate(h) },
+      back:   function(h) { h.goBack() },
+      accept: function(h) { root.menuActivate(h) },
+      abort:  function(h) { if (h.filterText) h.setFilter(""); else h.cancel() }
     },
     "omarchy.clipboard": {
       blocked: function(h) { return h.clearConfirmOpen === true },
-      next: function(h) { h.select(1) },
-      prev: function(h) { h.select(-1) }
+      next:   function(h) { h.select(1) },
+      prev:   function(h) { h.select(-1) },
+      accept: function(h) { if (h.cursorActive) h.activateIndex(h.selectedIndex)
+                            else h.select(0) },
+      abort:  function(h) { if (h.filterText) h.setFilter(""); else h.close() }
     },
     "omarchy.emojis": {
-      next: function(h) { h.selectRow(1) },
-      prev: function(h) { h.selectRow(-1) },
-      fwd:  function(h) { h.select(1) },
-      back: function(h) { h.select(-1) }
+      next:   function(h) { h.selectRow(1) },
+      prev:   function(h) { h.selectRow(-1) },
+      fwd:    function(h) { h.select(1) },
+      back:   function(h) { h.select(-1) },
+      accept: function(h) { if (h.cursorActive) h.activateIndex(h.selectedIndex)
+                            else h.select(0) },
+      abort:  function(h) { if (h.filterText) h.setFilter(""); else h.dismiss() }
     },
     "omarchy.image-picker": {
-      next: function(h) { h.selectAdjacent(1) },
-      prev: function(h) { h.selectAdjacent(-1) },
-      fwd:  function(h) { h.selectAdjacent(1) },
-      back: function(h) { h.selectAdjacent(-1) }
+      next:   function(h) { h.selectAdjacent(1) },
+      prev:   function(h) { h.selectAdjacent(-1) },
+      fwd:    function(h) { h.selectAdjacent(1) },
+      back:   function(h) { h.selectAdjacent(-1) },
+      accept: function(h) { h.applySelected() },
+      abort:  function(h) { if (h.filterText) h.updateFilter(""); else h.cancel() }
     }
   })
 
@@ -140,8 +169,10 @@ Item {
      signal act(string what); \
      Keys.onPressed: function(e) { \
        if (e.modifiers !== Qt.ControlModifier) return; \
-       var what = e.key === Qt.Key_N ? "next" : e.key === Qt.Key_P ? "prev" \
-                : e.key === Qt.Key_F ? "fwd"  : e.key === Qt.Key_B ? "back" : ""; \
+       var what = e.key === Qt.Key_N ? "next"   : e.key === Qt.Key_P ? "prev" \
+                : e.key === Qt.Key_F ? "fwd"    : e.key === Qt.Key_B ? "back" \
+                : e.key === Qt.Key_M ? "accept" : e.key === Qt.Key_BracketLeft ? "abort" \
+                : ""; \
        if (!what || claim[what] !== true) return; \
        if (blockedFn && blockedFn()) return; \
        handled = false; act(what); e.accepted = handled; \
@@ -214,8 +245,9 @@ Item {
     var host = loader.item
     var actions = surfaces[key]
     probe.claim = ({
-      next: actions.next !== undefined, prev: actions.prev !== undefined,
-      fwd:  actions.fwd  !== undefined, back: actions.back !== undefined
+      next:   actions.next   !== undefined, prev:  actions.prev  !== undefined,
+      fwd:    actions.fwd    !== undefined, back:  actions.back  !== undefined,
+      accept: actions.accept !== undefined, abort: actions.abort !== undefined
     })
     if (actions.blocked) probe.blockedFn = function() {
       try { return actions.blocked(host) === true } catch (e) { return false }
