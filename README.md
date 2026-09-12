@@ -20,6 +20,14 @@ Emacs semantics: `N`/`P` move by line, `F`/`B` move within it, which is why the
 mapping lands exactly on the emoji grid, and why the menu's `F`/`B` follow its
 existing Right/Left (descend/back) rather than paging.
 
+<p align="center">
+  <img src="screenshots/menu.png" height="330" alt="The Omarchy menu with the second row selected after Ctrl+N">
+  &nbsp;&nbsp;
+  <img src="screenshots/emojis.png" height="330" alt="The emoji picker with a cell on the second row selected after Ctrl+N">
+</p>
+
+<p align="center"><sub>The stock menu and emoji picker, unmodified, after <code>Ctrl+N</code>.</sub></p>
+
 On top of that, `Ctrl+M` is `Enter` and `Ctrl+[` is `Escape` on all four surfaces:
 the terminal control codes for CR and ESC, doing exactly what the real key does
 there, including `Escape`'s habit of clearing a non-empty filter before it closes
@@ -36,6 +44,9 @@ and only when Control alone is held, so `Ctrl+Shift+N` stays free.
 omarchy plugin add https://github.com/itsgg/omarchy-readline-keys.git --enable
 omarchy restart shell
 ```
+
+Also listed on the
+[Omarchy plugin marketplace](https://omarchyplugins.com/plugin.html?id=io.github.itsgg.readline-keys).
 
 Update with `omarchy plugin update io.github.itsgg.readline-keys`, remove with
 `omarchy plugin remove io.github.itsgg.readline-keys`.
