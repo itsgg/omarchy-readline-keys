@@ -64,7 +64,8 @@ stock and installs alongside them, so they keep updating with Omarchy normally.
 
 ## How it works
 
-A `service` plugin is handed the live `shell` object at startup. From there:
+A `service` plugin reaches the live `shell` object at startup (how it reaches it
+changed in [Omarchy 4.0.3](#omarchy-403)). From there:
 
 1. `shell.panelLoaders` maps each popup's plugin id to its `Loader`, and
    `loader.item` is the popup's root, a plain `Item` exposing public functions
@@ -86,6 +87,33 @@ A `service` plugin is handed the live `shell` object at startup. From there:
 Clones are supported too: if you already run a cloned menu, the plugin resolves
 it through the manifest's `clonedFrom` and attaches to the clone instead.
 
+## Omarchy 4.0.3
+
+4.0.3 (10 September 2026) narrowed what a third-party plugin is handed. The
+shell used to inject the live `ShellRoot` into a plugin property named `shell`;
+it now injects a capability-scoped facade (`PluginShellApi`) carrying the
+plugin's own id, bar state and lifecycle calls. That facade has no
+`panelLoaders` and no `openPanelIds`, so every release of this plugin up to
+2.0.0 stopped attaching on 4.0.3, and stopped silently, because finding nothing
+to attach to is indistinguishable from having nothing to do. Third-party
+`service` plugins are created with no QObject parent there as well, so walking
+out through the object tree is not an alternative.
+
+So it no longer depends on that injection. It declares no `shell` property at
+all, which leaves the name free for QML's creation context: the shell builds
+every plugin object from `shell.qml`'s own scope, where `shell` is the
+`ShellRoot` id, and the expression resolves to the live shell on 4.0.2 and
+4.0.3 alike.
+
+That is outside what the facade means to expose, so it is worth being exact
+about what it touches. 4.0.3's security boundary is elsewhere and is not
+weakened here: authentication services (lock, polkit) are held outside both the
+public service map and the reachable object graph, and nothing in this plugin
+goes near them. What it reaches is the panel loaders for popups you have open
+anyway. Upstream may still close the path, which is why failure is now loud: if
+the shell stops being reachable, the shell log says so once, and every stock key
+still works.
+
 ## If Omarchy changes underneath it
 
 Usually a no-op rather than a breakage. If a future Omarchy restructures a popup
@@ -98,6 +126,11 @@ Handler discovery is still a heuristic, though: a restructure that leaves a
 different focused item where the search looks could attach in the wrong place.
 Worth a quick check after a major Omarchy upgrade. Set `debug: true` in
 `Service.qml` to log what attached.
+
+Losing the shell itself is the one failure that cannot be a no-op, so it is
+reported rather than absorbed: `readline-keys: the shell's panel loaders are not
+reachable` in `qs -p /usr/share/omarchy/shell log` means this plugin is doing
+nothing at all and the release has moved. Nothing else changes.
 
 ## The pattern is the reusable part
 

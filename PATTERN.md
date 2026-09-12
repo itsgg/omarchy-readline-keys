@@ -28,20 +28,49 @@ receiving every fix to the other 1894.
 
 ## The technique
 
-Ship a `kind: "service"` plugin. Services are instantiated at shell startup and
-handed the live shell by property injection. `shell.qml`'s `ensureService()`
-sets any of `omarchyPath`, `shell`, `manifest`, `barWidgetRegistry` and
-`pluginRegistry` that your root object declares:
+Ship a `kind: "service"` plugin. Services are instantiated at shell startup, and
+up to Omarchy 4.0.2 they were handed the live shell by property injection:
+`shell.qml`'s `ensureService()` set any of `omarchyPath`, `shell`, `manifest`,
+`barWidgetRegistry` and `pluginRegistry` that your root object declared.
+
+**Omarchy 4.0.3 ended that for third-party plugins.** A plugin property named
+`shell` now receives a capability-scoped facade (`PluginShellApi`) holding your
+own plugin id, bar state and lifecycle calls, and nothing below. Third-party
+services are also created with a null QObject parent, so there is no object tree
+to walk out of.
+
+What still reaches the shell is QML's creation context. The host builds every
+plugin object from `shell.qml`'s own scope, where the `ShellRoot` carries
+`id: shell`, so an *undeclared* `shell` resolves to the live shell through the
+context chain, on both releases. Declare the property and you shadow it with the
+facade; leave the name alone and you get the real thing:
 
 ```qml
 Item {
-  property var shell: null
-  property var pluginRegistry: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+  // No `property var shell` here, deliberately.
+
+  property var shellRoot: null
+
+  function resolveShell() {
+    var h = null
+    try { h = (typeof shell !== "undefined") ? shell : null } catch (e) { h = null }
+    return (h && h.panelLoaders !== undefined) ? h : null
+  }
 }
 ```
 
-From `shell` you can reach every loaded popup:
+Check what comes back rather than trusting it, and say so out loud when it is
+missing. 4.0.3 turned this whole technique into a no-op on every plugin using
+it, and a plugin that only ever attaches on success has no way to tell that from
+having nothing to attach to.
+
+This is not part of the supported surface, and 4.0.3's own boundary is a
+different one: authentication services are held outside the reachable object
+graph entirely, and no context trick reaches them. Expect the loaders to be
+worth re-checking on every Omarchy release.
+
+From the shell you can reach every loaded popup:
 
 | What | Where |
 |---|---|
@@ -135,15 +164,21 @@ the way the shell does in `isPluginOpen()`: trust the root's `opened` property,
 and treat `openPanelIds` only as a fallback, since it is set before the loader
 resolves.
 
-**Beware binding to a function that reads an injected property.** `running:
-anyOpen()` looked reasonable and never ran once: property injection happens
-after the object is constructed, so on first evaluation `shell` was still null,
-the function returned before touching it, and QML captured no dependency to
-re-evaluate on. Either guard on the injected object itself (`running: !!shell`)
-or drive the work from a signal.
+**Beware binding to a function that reads a late-arriving property.** `running:
+anyOpen()` looked reasonable and never ran once: the shell is not in hand when
+the object is constructed, so on first evaluation the function returned before
+touching it, and QML captured no dependency to re-evaluate on. Either guard on
+the object itself (`running: !!shellRoot`) or drive the work from a signal.
 
 **A destroyed QObject leaves an invalidated wrapper.** Touching a property on it
 throws. Guard reads of anything you cached across a reload.
+
+**A local `var` shadows your root property for the whole function.** JavaScript
+hoists the declaration, so `var host = loader.item` halfway down a function turns
+every earlier `host` in that same function into the undefined local rather than
+the property of the same name. It fails as a silent early return, which looks
+exactly like having nothing to do. `qmllint -I /usr/lib/qt6/qml Service.qml`
+names it `var-used-before-declaration`; run it before you ship.
 
 **`keepLoaded` plugins ignore hot-reload.** Saving under
 `~/.config/omarchy/plugins/` normally reloads the plugin, but one already

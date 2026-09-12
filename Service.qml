@@ -10,21 +10,52 @@ import Quickshell
 // never apply. The usual workaround - `omarchy plugin clone` - forks 1000+ lines
 // of upstream QML that then never receives another upstream fix.
 //
-// This takes the other route. As a `service` plugin it is handed the live
+// This takes the other route. As a `service` plugin it reaches the live
 // `shell` object, walks to each popup's key-handling Item at runtime, parents a
 // tiny focused Item under it, and calls the popup's own public functions
 // (select / goBack / activateIndex / selectAdjacent / cancel). Keys we do not
 // claim propagate to the original handler untouched, so every stock binding
 // still works and the popups stay 100% upstream code.
+//
+// Omarchy 4.0.3 stopped injecting that object into third-party plugins (see
+// `shellRoot` below for how it is reached now, and README's "Omarchy 4.0.3" for
+// what changed and why).
 
 Item {
   id: root
 
   // Injected by omarchy-shell (see shell.qml, ensureService).
-  property var shell: null
-  property var pluginRegistry: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var manifest: null
+
+  // The live shell, which is where panelLoaders and openPanelIds live.
+  //
+  // Omarchy 4.0.2 and earlier injected it into a property named `shell`.
+  // 4.0.3 replaced that injection with a capability facade (PluginShellApi)
+  // carrying only pluginId, bar state and lifecycle calls, so the injected
+  // object no longer answers any question this plugin asks. Note what is NOT
+  // declared here: with no `shell` property claiming the name, `shell`
+  // resolves through the creation context instead, and the host builds every
+  // plugin object from shell.qml's own scope, where `shell` is the ShellRoot
+  // id. Same expression, same object, on both versions.
+  //
+  // It is checked rather than trusted. Going quietly inert is exactly what
+  // 4.0.3 did here, and nothing said so for two days.
+  property var shellRoot: null
+  property int shellTries: 0
+
+  function resolveShell() {
+    var h = null
+    try { h = (typeof shell !== "undefined") ? shell : null } catch (e) { h = null }
+    return (h && h.panelLoaders !== undefined && h.openPanelIds !== undefined) ? h : null
+  }
+
+  // The host's own registry, for the clone lookup in surfaceKeyFor. The
+  // injected `pluginRegistry` facade (PluginRegistryApi) describes only this
+  // plugin, so it cannot answer what a third-party id was cloned from.
+  function registry() {
+    return shellRoot && shellRoot.pluginRegistry ? shellRoot.pluginRegistry : null
+  }
 
   property bool debug: false
   function log(m) { if (debug) console.warn("readline-keys: " + m) }
@@ -99,8 +130,8 @@ Item {
   // carries a different id but declares what it replaced.
   function surfaceKeyFor(pluginId) {
     if (surfaces[pluginId] !== undefined) return pluginId
-    var m = pluginRegistry && pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins[pluginId] : null
+    var reg = registry()
+    var m = reg && reg.installedPlugins ? reg.installedPlugins[pluginId] : null
     var from = m && m.omarchy ? String(m.omarchy.clonedFrom || "") : ""
     return surfaces[from] !== undefined ? from : ""
   }
@@ -188,7 +219,7 @@ Item {
     // or an uninitialised value would otherwise suppress the fallback and leave
     // that popup permanently unfocused.
     try { if (host && typeof host.opened === "boolean") return host.opened } catch (e) {}
-    return !!(shell && shell.openPanelIds && shell.openPanelIds[pluginId] === true)
+    return !!(shellRoot && shellRoot.openPanelIds && shellRoot.openPanelIds[pluginId] === true)
   }
 
   function rememberOpen(pluginId, open) {
@@ -203,7 +234,7 @@ Item {
   function attach(pluginId) {
     var key = surfaceKeyFor(pluginId)
     if (!key) return
-    var loader = shell && shell.panelLoaders ? shell.panelLoaders[pluginId] : null
+    var loader = shellRoot && shellRoot.panelLoaders ? shellRoot.panelLoaders[pluginId] : null
     if (!loader || !loader.item) return
 
     var open = isOpen(pluginId, loader.item)
@@ -267,38 +298,58 @@ Item {
   }
 
   function attachAll() {
-    if (!shell || !shell.panelLoaders) return
-    for (var id in shell.panelLoaders) attach(id)
+    if (!shellRoot || !shellRoot.panelLoaders) return
+    for (var id in shellRoot.panelLoaders) attach(id)
   }
 
   function anyOpen() {
-    if (!shell || !shell.panelLoaders) return false
-    for (var id in shell.panelLoaders) {
+    if (!shellRoot || !shellRoot.panelLoaders) return false
+    for (var id in shellRoot.panelLoaders) {
       if (!surfaceKeyFor(id)) continue
-      var l = shell.panelLoaders[id]
+      var l = shellRoot.panelLoaders[id]
       if (l && l.item && isOpen(id, l.item)) return true
     }
     return false
   }
 
   Connections {
-    target: root.shell || null
+    target: root.shellRoot || null
     ignoreUnknownSignals: true
     function onPanelLoadersChanged() { root.attachAll() }
     function onOpenPanelIdsChanged() { root.attachAll() }
   }
 
-  // Deliberately unconditional. Gating `running` on a function that reads
-  // `shell` captured no binding dependency (shell is still null when the
-  // binding first evaluates, so the function returns before touching it) and
-  // the timer then never ticked at all. Each tick is a handful of map lookups
-  // and one activeFocus check, and focus is only taken for the popup that is
-  // actually open, so this is cheap and cannot start a focus fight.
+  // Deliberately unconditional. Gating `running` on a function that reads the
+  // host captured no binding dependency (it is still null when the binding
+  // first evaluates, so the function returns before touching it) and the timer
+  // then never ticked at all. Each tick is a handful of map lookups and one
+  // activeFocus check, and focus is only taken for the popup that is actually
+  // open, so this is cheap and cannot start a focus fight.
   Timer {
+    id: pump
     interval: 150
     repeat: true
-    running: !!root.shell
-    onTriggered: root.attachAll()
+    running: true
+    onTriggered: {
+      if (!root.shellRoot) {
+        root.shellRoot = root.resolveShell()
+        if (!root.shellRoot) {
+          // Three seconds is far longer than the shell takes to finish
+          // building. Past that the host is genuinely out of reach, and this
+          // has to say so and stop rather than spin: a silent no-op is how the
+          // 4.0.3 regression hid.
+          if (++root.shellTries >= 20) {
+            console.warn("readline-keys: the shell's panel loaders are not reachable, "
+              + "so readline keys are inactive. This build of Omarchy may no longer "
+              + "expose them to plugins.")
+            pump.running = false
+          }
+          return
+        }
+        root.log("host resolved")
+      }
+      root.attachAll()
+    }
   }
 
   // Probes are children of the popups, which are keepLoaded and so outlive us.
@@ -308,6 +359,9 @@ Item {
     probes = ({})
   }
 
-  Component.onCompleted: attachAll()
+  Component.onCompleted: {
+    shellRoot = resolveShell()
+    attachAll()
+  }
   Component.onDestruction: detachAll()
 }

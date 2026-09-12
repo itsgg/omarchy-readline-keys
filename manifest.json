@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.itsgg.readline-keys",
   "name": "Readline keys",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "itsgg",
   "description": "Readline keys (Ctrl+N/P/F/B, Ctrl+M, Ctrl+[) in Omarchy's menu, clipboard, emoji and image popups, without forking them",
   "kinds": [
