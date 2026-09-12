@@ -37,8 +37,13 @@ omarchy plugin add https://github.com/itsgg/omarchy-readline-keys.git --enable
 omarchy restart shell
 ```
 
-Update with `omarchy plugin update itsgg.readline-keys`, remove with
-`omarchy plugin remove itsgg.readline-keys`.
+Update with `omarchy plugin update io.github.itsgg.readline-keys`, remove with
+`omarchy plugin remove io.github.itsgg.readline-keys`.
+
+If `omarchy plugin list` still shows this plugin as `itsgg.readline-keys`, you
+have the old id: remove it under that name and add it again. Updating in place
+would leave a directory named for the old id holding a manifest declaring the
+new one.
 
 ## Why this exists
 
