@@ -1,5 +1,32 @@
 # Readline Keys
 
+> **Withdrawn from the Omarchy plugin marketplace on 2026-09-24.**
+>
+> Omarchy 4.0.3 stopped handing plugins the shell and gave them a capability
+> facade instead. The marketplace listing (`e99496d`) reads the shell the old way,
+> so on 4.0.3 and 4.0.4 it loads and does nothing. The code in this repository
+> reaches the shell through the QML creation context instead. That is what I run,
+> but it attaches keys to popups this plugin does not own, which the marketplace
+> review rightly refuses, and no supported plugin capability can do the same job.
+>
+> The feature belongs in Omarchy. For the menu, omacom/omarchy#7345 makes the
+> navigation keys configurable. Once it lands, all of this plugin's menu keys
+> except `Ctrl+[` for Escape, which stays hardcoded there, are a few lines in
+> `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
+>
+> ```jsonc
+> "keybindings": {
+>   "next":     ["CTRL + N"],
+>   "prev":     ["CTRL + P"],
+>   "activate": ["CTRL + F", "CTRL + M"],
+>   "back":     ["CTRL + B"],
+> },
+> ```
+>
+> omacom/omarchy#7737 would do the same through `keys.menu` in `shell.json`.
+> Clipboard, emojis and the image picker have no upstream equivalent yet. I plan
+> a follow-up PR for those once the menu change settles which mechanism to use.
+
 `Ctrl+N` / `Ctrl+P` / `Ctrl+F` / `Ctrl+B` navigation, plus `Ctrl+M` for `Enter`
 and `Ctrl+[` for `Escape`, in [Omarchy](https://omarchy.org)'s keyboard-driven
 popups, **without forking a single line of them**.
